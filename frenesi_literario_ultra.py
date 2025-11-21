@@ -39,6 +39,7 @@ from pdfminer.high_level import extract_text
 from lexicalrichness import LexicalRichness
 import spacy
 from spacy.lang.pt.stop_words import STOP_WORDS
+import statistics
 
 # Carrega modelo do spaCy
 nlp = spacy.load("pt_core_news_sm")
@@ -106,6 +107,93 @@ VERBOS_FORTES = {
     "rosnar", "grunhir", "sussurrar", "berrar", "murmurar", "bufar",
     "retrucar", "gritar", "soltar", "vomitar"
 }
+
+def marcar_monotonia_texto(lista):
+    saida = []
+    for item in lista:
+        if item["nivel"] == "Monótono":
+            saida.append(f"[MONOTONO] {item['paragrafo']}")
+        else:
+            saida.append(item["paragrafo"])
+    return "\n\n".join(saida)
+
+def salvar_relatorio_monotonia(lista, caminho):
+    with open(caminho, "w", encoding="utf-8") as f:
+        f.write("RELATÓRIO DE MONOTONIA POR PARÁGRAFO\n")
+        f.write("=====================================\n\n")
+
+        for item in lista:
+            f.write(f"Parágrafo {item['numero']}\n")
+            f.write(f"Classificação: {item['nivel']}\n")
+            f.write(f"Tamanhos das frases: {item['frases']}\n")
+            f.write(f"Índice de Ritmo (IR): {item['ir']:.3f}\n")
+            f.write(f"Alternância (SW): {item['sw']}\n")
+            f.write("-" * 50 + "\n")
+
+
+def analisar_monotonia_por_paragrafo(texto: str):
+    paragrafos = [p.strip() for p in texto.split("\n") if p.strip()]
+
+    resultados = []
+    for i, p in enumerate(paragrafos, start=1):
+        m = medir_monotonia(p)
+        resultados.append({
+            "numero": i,
+            "paragrafo": p,
+            "frases": m["frases"],
+            "ir": m["ir"],
+            "sw": m["sw"],
+            "nivel": m["nivel"]
+        })
+
+    return resultados
+
+
+def medir_monotonia(paragrafo: str):
+    doc = nlp(paragrafo)
+
+    # tamanhos das frases
+    tamanhos = [len(sent.text.split()) for sent in doc.sents]
+
+    if len(tamanhos) == 0:
+        return {"frases": [], "ir": 0, "sw": 0, "nivel": "Indeterminado"}
+
+    # índice de ritmo (desvio / média)
+    media = statistics.mean(tamanhos)
+    desvio = statistics.pstdev(tamanhos)
+    ir = desvio / media if media > 0 else 0
+
+    # categorizar frases
+    def cat(t):
+        if t < 10:
+            return "C"   # curta
+        elif t <= 20:
+            return "M"   # média
+        else:
+            return "L"   # longa
+
+    cats = [cat(t) for t in tamanhos]
+
+    # switch index
+    sw = sum(1 for i in range(1, len(cats)) if cats[i] != cats[i-1])
+
+    # classificação final
+    if ir < 0.15 and sw <= 1:
+        nivel = "Monótono"
+    elif ir < 0.30:
+        nivel = "Ritmo moderado"
+    elif ir < 0.55:
+        nivel = "Variado"
+    else:
+        nivel = "Irregular / Caótico"
+
+    return {
+        "frases": tamanhos,
+        "ir": ir,
+        "sw": sw,
+        "nivel": nivel
+    }
+
 
 def frases_numeradas_somente_marcadas(texto: str):
     """
@@ -422,68 +510,104 @@ def gerar_highlight(texto: str) -> str:
 
 
 def salvar_relatorio(global_stats: dict, capitulos_stats: list, caminho_saida: str):
-    """Salva o relatório textual completo no arquivo indicado."""
+    """Salva o relatório completo em formato Markdown."""
     with open(caminho_saida, "w", encoding="utf-8") as f:
-        f.write("FRENÊSI LITERÁRIO™ ULTRA – Relatório Completo\n")
-        f.write("=============================================\n\n")
 
-        f.write("=== MÉTRICAS GLOBAIS ===\n")
-        f.write(f"Total de palavras: {global_stats['total_palavras']}\n")
-        f.write(f"Total de frases: {global_stats['total_frases']}\n")
-        f.write(f"Tamanho médio das frases: {global_stats['tamanho_medio_frase']:.2f}\n")
-        f.write(f"Frase mais longa: {global_stats['tamanho_max_frase']} palavras\n")
-        f.write(f"Frase mais curta: {global_stats['tamanho_min_frase']} palavras\n\n")
+        # Título
+        f.write("# FRENÊSI LITERÁRIO™ ULTRA – Relatório Completo\n\n")
 
-        f.write("=== VOCABULÁRIO ===\n")
-        f.write(f"TTR: {global_stats['ttr']:.3f}\n")
-        f.write(f"MTLD: {global_stats['mtld']:.3f}\n")
-        f.write(f"HDD: {global_stats['hdd']:.3f}\n")
-        f.write(f"Densidade lexical (por bloco de 100): {global_stats['densidade_lexical']:.3f}\n")
-        f.write(f"Índice de repetição: {global_stats['indice_repeticao']:.3f}\n\n")
+        # =============================
+        # MÉTRICAS GLOBAIS
+        # =============================
+        f.write("## 📊 Métricas Globais\n")
+        f.write(f"- **Total de palavras:** {global_stats['total_palavras']}\n")
+        f.write(f"- **Total de frases:** {global_stats['total_frases']}\n")
+        f.write(f"- **Tamanho médio das frases:** {global_stats['tamanho_medio_frase']:.2f}\n")
+        f.write(f"- **Frase mais longa:** {global_stats['tamanho_max_frase']} palavras\n")
+        f.write(f"- **Frase mais curta:** {global_stats['tamanho_min_frase']} palavras\n\n")
 
-        f.write("=== VERBOS E ADVÉRBIOS ===\n")
-        f.write(f"Verbos fracos: {global_stats['verbos_fracos']}\n")
-        f.write(f"Verbos fortes: {global_stats['verbos_fortes']}\n")
-        total_v = global_stats['verbos_fracos'] + global_stats['verbos_fortes']
-        if total_v > 0:
-            ratio_f = global_stats['verbos_fortes'] / total_v
-        else:
-            ratio_f = 0.0
-        f.write(f"Proporção de verbos fortes: {ratio_f:.3f}\n")
-        f.write(f"Advérbios em -mente: {global_stats['adv_mente']}\n\n")
+        # =============================
+        # VOCABULÁRIO
+        # =============================
+        f.write("## 🧠 Vocabulário\n")
+        f.write(f"- **TTR:** {global_stats['ttr']:.3f}\n")
+        f.write(f"- **MTLD:** {global_stats['mtld']:.3f}\n")
+        f.write(f"- **HDD:** {global_stats['hdd']:.3f}\n")
+        f.write(f"- **Densidade lexical (por 100 palavras):** {global_stats['densidade_lexical']:.3f}\n")
+        f.write(f"- **Índice de repetição:** {global_stats['indice_repeticao']:.3f}\n\n")
 
-        f.write("=== TOP 20 PALAVRAS (sem stopwords) ===\n")
+        # =============================
+        # VERBOS / ADVÉRBIOS
+        # =============================
+        f.write("## 🔧 Verbos e Advérbios\n")
+        f.write(f"- **Verbos fracos:** {global_stats['verbos_fracos']}\n")
+        f.write(f"- **Verbos fortes:** {global_stats['verbos_fortes']}\n")
+
+        total_v = global_stats["verbos_fracos"] + global_stats["verbos_fortes"]
+        ratio_f = (global_stats["verbos_fortes"] / total_v) if total_v > 0 else 0.0
+
+        f.write(f"- **Proporção de verbos fortes:** {ratio_f:.3f}\n")
+        f.write(f"- **Advérbios terminados em -mente:** {global_stats['adv_mente']}\n\n")
+
+        # =============================
+        # TOP PALAVRAS
+        # =============================
+        f.write("## 🔝 Top 20 Palavras (sem stopwords)\n")
+        f.write("| Palavra | Frequência |\n")
+        f.write("|---------|------------|\n")
         for palavra, freq in global_stats["top_20_palavras"]:
-            f.write(f"  {palavra}: {freq}\n")
+            f.write(f"| {palavra} | {freq} |\n")
         f.write("\n")
 
-        f.write("=== NOTA FRENÊSI™ GLOBAL ===\n")
-        f.write(f"Nota: {global_stats['nota_frenesi']:.1f} / 100\n\n")
+        # =============================
+        # NOTA GLOBAL
+        # =============================
+        f.write("## 🎯 Nota FRENÊSI™ Global\n")
+        f.write(f"**{global_stats['nota_frenesi']:.1f} / 100**\n\n")
 
-        f.write("=== DIAGNÓSTICO GLOBAL ===\n")
+        # =============================
+        # DIAGNÓSTICO
+        # =============================
+        f.write("## 🩺 Diagnóstico Global\n")
         for aviso in diagnostico(global_stats):
             f.write(f"- {aviso}\n")
         f.write("\n")
 
-        f.write("=============================================\n")
-        f.write("=== ANÁLISE POR CAPÍTULO ===\n\n")
+        # =============================
+        # ANÁLISE POR CAPÍTULO
+        # =============================
+        f.write("---\n")
+        f.write("# 📚 Análise por Capítulo\n\n")
 
         for cap in capitulos_stats:
             titulo = cap["titulo"]
             stats = cap["stats"]
-            f.write(f"--- {titulo} ---\n")
-            f.write(f"Palavras: {stats['total_palavras']} | Frases: {stats['total_frases']}\n")
-            f.write(f"Tamanho médio das frases: {stats['tamanho_medio_frase']:.2f}\n")
-            f.write(f"Verbos fracos: {stats['verbos_fracos']} | Verbos fortes: {stats['verbos_fortes']}\n")
-            total_vc = stats['verbos_fortes'] + stats['verbos_fracos']
-            ratio_fc = stats['verbos_fortes'] / total_vc if total_vc > 0 else 0.0
-            f.write(f"Proporção de verbos fortes: {ratio_fc:.3f}\n")
-            f.write(f"TTR: {stats['ttr']:.3f} | MTLD: {stats['mtld']:.3f} | HDD: {stats['hdd']:.3f}\n")
-            f.write(f"Nota FRENÊSI™ do capítulo: {stats['nota_frenesi']:.1f}\n")
 
+            f.write(f"## {titulo}\n\n")
+
+            # Tabela com métricas básicas
+            f.write("| Métrica | Valor |\n")
+            f.write("|---------|-------|\n")
+            f.write(f"| Palavras | {stats['total_palavras']} |\n")
+            f.write(f"| Frases | {stats['total_frases']} |\n")
+            f.write(f"| Tamanho médio das frases | {stats['tamanho_medio_frase']:.2f} |\n")
+            f.write(f"| Verbos fracos | {stats['verbos_fracos']} |\n")
+            f.write(f"| Verbos fortes | {stats['verbos_fortes']} |\n")
+
+            total_vc = stats["verbos_fracos"] + stats["verbos_fortes"]
+            ratio_fc = stats["verbos_fortes"] / total_vc if total_vc > 0 else 0.0
+
+            f.write(f"| Proporção de verbos fortes | {ratio_fc:.3f} |\n")
+            f.write(f"| TTR | {stats['ttr']:.3f} |\n")
+            f.write(f"| MTLD | {stats['mtld']:.3f} |\n")
+            f.write(f"| HDD | {stats['hdd']:.3f} |\n")
+            f.write(f"| Nota FRENÊSI™ | {stats['nota_frenesi']:.1f} |\n")
+            f.write("\n")
+
+            # Diagnóstico do capítulo
+            f.write("### Diagnóstico\n")
             for aviso in diagnostico(stats):
                 f.write(f"- {aviso}\n")
-
             f.write("\n")
 
 
@@ -537,6 +661,13 @@ def main():
 
     print(f"Relatório salvo em: {args.saida}")
     print(f"Texto destacado salvo em: {destaque_path}")
+
+    print("Analisando monotonia por parágrafo...")
+    monotonia = analisar_monotonia_por_paragrafo(texto_global)
+
+    rel_monotonia_path = base + "_monotonia_paragrafos.txt"
+    salvar_relatorio_monotonia(monotonia, rel_monotonia_path)
+    print("Relatório de monotonia salvo em:", rel_monotonia_path)
 
 
 if __name__ == "__main__":

@@ -149,27 +149,50 @@ Adjetivos por 1000 palavras
 def salvar_relatorio(stats, avisos, caminho):
     with open(caminho, "w", encoding="utf-8") as f:
 
-        f.write("ANÁLISE MORFOSSINTÁTICA – RELATÓRIO\n")
-        f.write("===================================\n\n")
+        # Cabeçalho
+        f.write("# 🧠 Análise Morfossintática – Relatório\n\n")
 
-        f.write("=== CONTAGEM ===\n")
-        f.write(f"Palavras consideradas: {stats['tokens']}\n")
-        f.write(f"Substantivos: {stats['substantivos']}\n")
-        f.write(f"Adjetivos: {stats['adjetivos']}\n")
-        f.write(f"Verbos: {stats['verbos']}\n\n")
+        # ---------------------------------------
+        # CONTAGEM
+        # ---------------------------------------
+        f.write("## 📦 Contagem Geral\n")
+        f.write("| Categoria | Valor |\n")
+        f.write("|-----------|-------|\n")
+        f.write(f"| Palavras consideradas | {stats['tokens']} |\n")
+        f.write(f"| Substantivos | {stats['substantivos']} |\n")
+        f.write(f"| Adjetivos | {stats['adjetivos']} |\n")
+        f.write(f"| Verbos | {stats['verbos']} |\n\n")
 
-        f.write("=== MÉTRICAS ===\n")
-        f.write(f"N/V (substantivos/verbos): {stats['n_v']:.3f}\n")
-        f.write(f"ADJ/N (adjetivos/substantivos): {stats['adj_n']:.3f}\n")
-        f.write(f"Densidade verbal: {stats['densidade_verbos']*100:.2f}%\n")
-        f.write(f"Adjetivos por 1000 palavras: {stats['adj_por_1000']:.1f}\n\n")
+        # ---------------------------------------
+        # MÉTRICAS
+        # ---------------------------------------
+        f.write("## 📊 Métricas\n")
+        f.write("| Métrica | Valor |\n")
+        f.write("|---------|-------|\n")
+        f.write(f"| **N/V** (substantivos ÷ verbos) | {stats['n_v']:.3f} |\n")
+        f.write(f"| **ADJ/N** (adjetivos ÷ substantivos) | {stats['adj_n']:.3f} |\n")
+        f.write(f"| **Densidade verbal** | {stats['densidade_verbos']*100:.2f}% |\n")
+        f.write(f"| **Adjetivos por 1000 palavras** | {stats['adj_por_1000']:.1f} |\n\n")
 
-        f.write("=== ALERTAS ===\n")
-        for a in avisos:
-            f.write(f"- {a}\n")
+        # ---------------------------------------
+        # ALERTAS
+        # ---------------------------------------
+        f.write("## ⚠️ Alertas\n")
+        if avisos:
+            for a in avisos:
+                f.write(f"- {a}\n")
+        else:
+            f.write("- Nenhum alerta detectado.\n")
         f.write("\n")
 
+        # ---------------------------------------
+        # TABELA DE REFERÊNCIA
+        # ---------------------------------------
+        f.write("## 📚 Tabela de Referência\n")
+        f.write("```\n")
         f.write(tabela_referencia())
+        f.write("```\n")
+
 
 # -------------------------------------------------------------
 

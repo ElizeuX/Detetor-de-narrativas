@@ -119,14 +119,14 @@ def gerar_relatorio_tematico(caminho_arquivo, df_frequencia, total_palavras_brut
 if __name__ == "__main__":
 
     # 📌 CONFIGURAÇÕES
-    caminho_do_arquivo = 'main.pdf'
+    caminho_do_arquivo = 'main_capitulo.pdf'
     top_n_palavras = 50
 
     # Variável de configuração formalizada para ser passada às funções
     MIN_TAMANHO_PALAVRA = 3
 
     # Adicione aqui nomes de personagens específicos ou palavras muito comuns que você quer ignorar
-    palavras_extras_excluir = {'elizeu', 'montanha', 'castelo'}
+    palavras_extras_excluir = {'elizeu', 'xavier', 'Paixão', 'Segundo', 'Miguel', 'miguel', 'jonathan'}
 
     print(f"--- 📊 Analisador de Frequência Temática ---")
 
