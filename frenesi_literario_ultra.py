@@ -426,6 +426,21 @@ def diagnostico(stats: dict):
 
     return avisos
 
+def contar_verbos_fracos_fortes(doc):
+    fracos = 0
+    fortes = 0
+
+    for token in doc:
+        if token.pos_ == "VERB":
+            lemma = token.lemma_.lower()
+
+            if lemma in VERBOS_FRACOS:
+                fracos += 1
+            elif lemma in VERBOS_FORTES:
+                fortes += 1
+
+    return fracos, fortes
+
 
 def examinar_texto(texto: str) -> dict:
     """Executa toda a análise em um trecho de texto."""
@@ -437,6 +452,9 @@ def examinar_texto(texto: str) -> dict:
     # Frases
     frases = segmentar_frases(texto_limpo)
     tamanhos_frase = [len(f.split()) for f in frases] if frases else []
+
+    # Análise spaCy
+    doc = nlp(texto_limpo)
 
     # Vocabulário
     palavras_filtradas = [p for p in palavras if p not in STOPWORDS]
@@ -451,12 +469,18 @@ def examinar_texto(texto: str) -> dict:
     else:
         ttr = mtld = hdd = 0.0
 
-    # Advérbios em -mente
-    adv_mente = [p for p in palavras if p.endswith("mente")]
+    # Advérbios em -mente (de verdade, não qualquer coisa que termina em "mente")
+    adv_mente_tokens = [
+        token for token in doc
+        if token.pos_ == "ADV" and token.text.lower().endswith("mente")
+    ]
 
-    # Verbos fracos / fortes (por string simples)
-    verbos_fracos = [p for p in palavras if p in VERBOS_FRACOS]
-    verbos_fortes = [p for p in palavras if p in VERBOS_FORTES]
+    # Usa o spaCy para analisar o texto inteiro como documento linguístico
+    doc = nlp(texto_limpo)
+
+    # Verbos fracos e fortes: agora detectados por LEMMA, incluindo flexões
+    vf, vfo = contar_verbos_fracos_fortes(doc)
+
 
     stats = {
         "total_palavras": total_palavras,
@@ -465,9 +489,9 @@ def examinar_texto(texto: str) -> dict:
         "tamanho_max_frase": max(tamanhos_frase) if tamanhos_frase else 0,
         "tamanho_min_frase": min(tamanhos_frase) if tamanhos_frase else 0,
         "top_20_palavras": contador.most_common(20),
-        "adv_mente": len(adv_mente),
-        "verbos_fracos": len(verbos_fracos),
-        "verbos_fortes": len(verbos_fortes),
+        "adv_mente": len(adv_mente_tokens),
+        "verbos_fracos": vf,
+        "verbos_fortes": vfo,
         "ttr": ttr,
         "mtld": mtld,
         "hdd": hdd,
@@ -483,28 +507,36 @@ def examinar_texto(texto: str) -> dict:
 
 def gerar_highlight(texto: str) -> str:
     """
-    Gera uma versão do texto com destaques:
-    - [FRACO: palavra]
-    - [FORTE: palavra]
-    - [ADV: palavra] para advérbios em -mente
+    Gera texto com destaques:
+    - [FRACO:tok]
+    - [FORTE:tok]
+    - [ADV:tok]    (somente advérbios reais terminados em -mente)
     """
+    doc = nlp(texto)  # spaCy para POS + lemma
     resultado = []
-    # separa palavras e não-palavras para preservar espaçamento
-    tokens = re.findall(r"\w+|\W+", texto)
 
-    for tok in tokens:
-        if tok.strip() and re.match(r"\w+", tok):
-            base = tok.lower()
-            if base in VERBOS_FRACOS:
-                resultado.append(f"[FRACO:{tok}]")
-            elif base in VERBOS_FORTES:
-                resultado.append(f"[FORTE:{tok}]")
-            elif base.endswith("mente"):
-                resultado.append(f"[ADV:{tok}]")
-            else:
-                resultado.append(tok)
+    for token in doc:
+        tok = token.text
+        base = tok.lower()
+
+        # Verbo fraco pelo lemma
+        if token.pos_ == "VERB" and token.lemma_.lower() in VERBOS_FRACOS:
+            resultado.append(f"[FRACO:{tok}]")
+
+        # Verbo forte pelo lemma
+        elif token.pos_ == "VERB" and token.lemma_.lower() in VERBOS_FORTES:
+            resultado.append(f"[FORTE:{tok}]")
+
+        # Advérbio REAL em -mente
+        elif token.pos_ == "ADV" and base.endswith("mente"):
+            resultado.append(f"[ADV:{tok}]")
+
+        # Caso contrário, reproduz o token original
         else:
             resultado.append(tok)
+
+        # Adiciona o whitespace original (spaCy mantém)
+        resultado.append(token.whitespace_)
 
     return "".join(resultado)
 
